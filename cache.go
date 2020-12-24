@@ -2,7 +2,8 @@ package gocache
 
 import (
 	"gocache/lru"
-	"sync")
+	"sync"
+)
 
 
 type cache struct {
