@@ -29,8 +29,9 @@ func (f GetterFunc)Get(key string)([]byte,error){
 // A Group is a cache namespace and associated data loaded spread over
 type Group struct {
 	name string 
-	getter Getter
+	getter Getter  
 	mainCache cache
+	peers PeerPicker 
 }
 
 var (
@@ -59,20 +60,49 @@ func GetGroup(name string)*Group{
 	mu.RUnlock()
 	return g
 }
+// 注册一个PeerPicker 用于选择远处的节点
+func (g *Group)RegisterPeers(peers PeerPicker){
+	if g.peers!=nil{
+		panic("RegisterPeerPicker called more than once")
+	}
+	g.peers=peers
+}
+
 
 func (g *Group)Get(key string)(ByteView,error){
 	if key==""{
 		return ByteView{}, fmt.Errorf("key is required")
 	}
 	if v,ok:=g.mainCache.get(key);ok{
+		//这里是从本地的缓存获取
 		log.Println("[GeeCache] hit")
 		return v,nil
 	}
+	// 如果本地的缓存没有 则从load 导入
 	return g.load(key)
 }
 
 func (g *Group)load(key string)(value ByteView,err error){
+	// 导入的策略 也分为两种 若
+	if g.peers!=nil{
+		if peer,ok:=g.peers.PickPeer(key);ok{
+			if value,err:=g.getFromPeer(peer,key);err!=nil{
+				return value,nil
+			}
+		}
+		log.Println("[gochche] Failed to get from peer", err)
+
+	}
+	// 如果没有远程节点 则从本地获取
 	return g.getLocally(key)
+}
+
+func (g *Group)getFromPeer(peer PeerGetter,key string)(ByteView,error){
+	bytes,err:=peer.Get(g.name,key)
+	if err!=nil{
+		return ByteView{},err
+	}
+	return ByteView{b: bytes},nil
 }
 
 func (g *Group) getLocally(key string) (ByteView, error) {
@@ -86,6 +116,8 @@ func (g *Group) getLocally(key string) (ByteView, error) {
 	return value, nil
 }
 
+// 填充缓存 将key:value 填充缓存
 func (g *Group) populateCache(key string, value ByteView) {
 	g.mainCache.add(key, value)
 }
+
