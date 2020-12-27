@@ -27,6 +27,7 @@ func createGroup() *gocache.Group {
 }
 
 
+
 // 启动缓存服务器 
 func startCacheServer(addr string, addrs []string, goc *gocache.Group) {
 	peers := gocache.NewHTTPPool(addr)
